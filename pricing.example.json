@@ -1,0 +1,11 @@
+{
+  "local-model": {
+    "input_per_mtok": 0.0,
+    "output_per_mtok": 0.0
+  },
+  "replace-with-a-model-name": {
+    "input_per_mtok": 0.0,
+    "output_per_mtok": 0.0,
+    "cached_input_per_mtok": 0.0
+  }
+}

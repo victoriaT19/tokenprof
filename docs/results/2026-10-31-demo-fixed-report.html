@@ -1,0 +1,57 @@
+<!doctype html><html lang='en'><head><meta charset='utf-8'>
+<meta name='viewport' content='width=device-width, initial-scale=1'>
+<title>tokenprof report</title><style>
+:root {
+  --bg: #ffffff; --fg: #1d1d1f; --muted: #6e6e73; --line: #e3e3e8; --card: #f6f6f8;
+  --system: #6c5ce7; --tool_schemas: #a29bfe; --user: #0984e3; --assistant: #74b9ff;
+  --tool_output: #e17055; --output: #00b894; --cached: #1d1d1f;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #141416; --fg: #f2f2f5; --muted: #a1a1a8; --line: #2c2c31; --card: #1e1e22;
+    --system: #8e83f0; --tool_schemas: #b8b2ff; --user: #3aa0f0; --assistant: #8ccaff;
+    --tool_output: #f0866b; --output: #2fd3a6; --cached: #f2f2f5;
+  }
+}
+* { box-sizing: border-box; }
+body { margin: 0; background: var(--bg); color: var(--fg);
+  font: 15px/1.5 system-ui, -apple-system, "Segoe UI", sans-serif; }
+main { max-width: 960px; margin: 0 auto; padding: 32px 16px 64px; }
+h1 { font-size: 26px; margin: 0 0 4px; }
+h2 { font-size: 19px; margin: 40px 0 12px; }
+h3 { font-size: 15px; margin: 24px 0 8px; }
+.muted { color: var(--muted); }
+.cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 12px; margin-top: 24px; }
+.card { background: var(--card); border-radius: 10px; padding: 14px 16px; }
+.card b { display: block; font-size: 22px; font-variant-numeric: tabular-nums; }
+.card span { color: var(--muted); font-size: 13px; }
+table { width: 100%; border-collapse: collapse; font-variant-numeric: tabular-nums; }
+th, td { text-align: left; padding: 8px 10px; border-bottom: 1px solid var(--line); vertical-align: top; }
+th { color: var(--muted); font-weight: 600; font-size: 13px; }
+td.num, th.num { text-align: right; }
+.finding { border: 1px solid var(--line); border-radius: 10px; padding: 12px 14px; margin-bottom: 10px; }
+.finding .head { display: flex; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
+.finding .fix { color: var(--muted); margin-top: 4px; }
+.legend { display: flex; flex-wrap: wrap; gap: 14px; font-size: 13px; color: var(--muted); margin: 8px 0 4px; }
+.legend i { display: inline-block; width: 11px; height: 11px; border-radius: 2px; margin-right: 5px; vertical-align: -1px; }
+.chart { margin-bottom: 8px; }
+svg text { fill: var(--fg); font-size: 12px; }
+</style></head><body><main>
+<h1>tokenprof report</h1>
+<div class='muted'>2026-10-31-demo-fixed.jsonl · generated 2026-11-01 01:07 UTC</div>
+<div class='cards'>
+<div class='card'><b>6</b><span>calls in 3 run(s)</span></div>
+<div class='card'><b>1,283</b><span>prompt tokens</span></div>
+<div class='card'><b>105</b><span>output tokens</span></div>
+<div class='card'><b>74%</b><span>of prompt tokens cached</span></div>
+<div class='card'><b>0</b><span>est. wasted prompt tokens (0%)</span></div>
+</div>
+<h2>Waste</h2><p>No waste detected.</p>
+
+<h2>Token anatomy per call</h2>
+<p class='muted'>Each bar is one call: its prompt split by content type, then its output. The outlined region at the start of a bar is the part served from cache. Totals are as reported by the provider; the split between parts is estimated from text length.</p>
+<div class='legend'><span><i style='background:var(--system)'></i>System</span><span><i style='background:var(--tool_schemas)'></i>Tool schemas</span><span><i style='background:var(--user)'></i>User</span><span><i style='background:var(--assistant)'></i>Assistant (history)</span><span><i style='background:var(--tool_output)'></i>Tool output</span><span><i style='background:var(--output)'></i>Output</span></div>
+<h3>Run fixed-101</h3><div class='chart'><svg viewBox='0 0 640 50' style='width:100%;max-width:640px;height:auto' role='img' aria-label='Token anatomy for run fixed-101'><text x='0' y='17'>#0 step-0</text><rect x='150.0' y='3' width='108.8' height='16' style='fill:var(--system)'><title>System: ~58 tokens</title></rect><rect x='258.8' y='3' width='189.4' height='16' style='fill:var(--tool_schemas)'><title>Tool schemas: ~101 tokens</title></rect><rect x='448.1' y='3' width='52.5' height='16' style='fill:var(--user)'><title>User: ~28 tokens</title></rect><rect x='500.6' y='3' width='41.2' height='16' style='fill:var(--output)'><title>Output: ~22 tokens</title></rect><rect x='150' y='2' width='56.2' height='18' style='fill:none;stroke:var(--cached);stroke-width:1.5;stroke-dasharray:3 2'><title>Cached: 30 tokens</title></rect><text x='0' y='39'>#1 step-1</text><rect x='150.0' y='25' width='97.5' height='16' style='fill:var(--system)'><title>System: ~52 tokens</title></rect><rect x='247.5' y='25' width='172.5' height='16' style='fill:var(--tool_schemas)'><title>Tool schemas: ~92 tokens</title></rect><rect x='420.0' y='25' width='46.9' height='16' style='fill:var(--user)'><title>User: ~25 tokens</title></rect><rect x='466.9' y='25' width='106.9' height='16' style='fill:var(--assistant)'><title>Assistant (history): ~57 tokens</title></rect><rect x='573.8' y='25' width='26.2' height='16' style='fill:var(--tool_output)'><title>Tool output: ~14 tokens</title></rect><rect x='600.0' y='25' width='28.1' height='16' style='fill:var(--output)'><title>Output: ~15 tokens</title></rect><rect x='150' y='24' width='378.8' height='18' style='fill:none;stroke:var(--cached);stroke-width:1.5;stroke-dasharray:3 2'><title>Cached: 202 tokens</title></rect></svg></div>
+<h3>Run fixed-102</h3><div class='chart'><svg viewBox='0 0 640 50' style='width:100%;max-width:640px;height:auto' role='img' aria-label='Token anatomy for run fixed-102'><text x='0' y='17'>#0 step-0</text><rect x='150.0' y='3' width='109.6' height='16' style='fill:var(--system)'><title>System: ~58 tokens</title></rect><rect x='259.6' y='3' width='190.9' height='16' style='fill:var(--tool_schemas)'><title>Tool schemas: ~101 tokens</title></rect><rect x='450.5' y='3' width='52.9' height='16' style='fill:var(--user)'><title>User: ~28 tokens</title></rect><rect x='503.4' y='3' width='41.6' height='16' style='fill:var(--output)'><title>Output: ~22 tokens</title></rect><rect x='150' y='2' width='300.5' height='18' style='fill:none;stroke:var(--cached);stroke-width:1.5;stroke-dasharray:3 2'><title>Cached: 159 tokens</title></rect><text x='0' y='39'>#1 step-1</text><rect x='150.0' y='25' width='98.3' height='16' style='fill:var(--system)'><title>System: ~52 tokens</title></rect><rect x='248.3' y='25' width='172.0' height='16' style='fill:var(--tool_schemas)'><title>Tool schemas: ~91 tokens</title></rect><rect x='420.2' y='25' width='47.2' height='16' style='fill:var(--user)'><title>User: ~25 tokens</title></rect><rect x='467.5' y='25' width='107.7' height='16' style='fill:var(--assistant)'><title>Assistant (history): ~57 tokens</title></rect><rect x='575.2' y='25' width='30.2' height='16' style='fill:var(--tool_output)'><title>Tool output: ~16 tokens</title></rect><rect x='605.4' y='25' width='24.6' height='16' style='fill:var(--output)'><title>Output: ~13 tokens</title></rect><rect x='150' y='24' width='381.7' height='18' style='fill:none;stroke:var(--cached);stroke-width:1.5;stroke-dasharray:3 2'><title>Cached: 202 tokens</title></rect></svg></div>
+<h3>Run fixed-103</h3><div class='chart'><svg viewBox='0 0 640 50' style='width:100%;max-width:640px;height:auto' role='img' aria-label='Token anatomy for run fixed-103'><text x='0' y='17'>#0 step-0</text><rect x='150.0' y='3' width='110.9' height='16' style='fill:var(--system)'><title>System: ~58 tokens</title></rect><rect x='260.9' y='3' width='193.1' height='16' style='fill:var(--tool_schemas)'><title>Tool schemas: ~101 tokens</title></rect><rect x='454.1' y='3' width='53.5' height='16' style='fill:var(--user)'><title>User: ~28 tokens</title></rect><rect x='507.6' y='3' width='42.1' height='16' style='fill:var(--output)'><title>Output: ~22 tokens</title></rect><rect x='150' y='2' width='304.1' height='18' style='fill:none;stroke:var(--cached);stroke-width:1.5;stroke-dasharray:3 2'><title>Cached: 159 tokens</title></rect><text x='0' y='39'>#1 step-1</text><rect x='150.0' y='25' width='99.4' height='16' style='fill:var(--system)'><title>System: ~52 tokens</title></rect><rect x='249.4' y='25' width='174.0' height='16' style='fill:var(--tool_schemas)'><title>Tool schemas: ~91 tokens</title></rect><rect x='423.5' y='25' width='47.8' height='16' style='fill:var(--user)'><title>User: ~25 tokens</title></rect><rect x='471.3' y='25' width='107.1' height='16' style='fill:var(--assistant)'><title>Assistant (history): ~56 tokens</title></rect><rect x='578.4' y='25' width='30.6' height='16' style='fill:var(--tool_output)'><title>Tool output: ~16 tokens</title></rect><rect x='609.0' y='25' width='21.0' height='16' style='fill:var(--output)'><title>Output: ~11 tokens</title></rect><rect x='150' y='24' width='386.3' height='18' style='fill:none;stroke:var(--cached);stroke-width:1.5;stroke-dasharray:3 2'><title>Cached: 202 tokens</title></rect></svg></div>
+</main></body></html>
