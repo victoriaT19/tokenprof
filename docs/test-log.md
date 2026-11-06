@@ -175,7 +175,7 @@ Na primeira tentativa, o Ollama tentou usar a GPU integrada Intel pelo backend V
 1. **Saídas de ferramenta dominam o custo dos agentes:** 76% dos tokens de prompt no OpenAI Agents SDK e 43% no smolagents, na linha de base. Devolver só os campos necessários cortou 56% dos tokens sem mudar nenhum acerto.
 2. **O system prompt padrão do smolagents é grande:** depois da correção, ele passa a ser 74% dos tokens de prompt (cerca de 1.100 tokens por chamada). Por isso o smolagents gasta 4,3× mais que o OpenAI Agents SDK por tarefa na versão corrigida (2.990 contra 691). Nenhum detector atual aponta isso, porque um prompt fixo pode vir do cache. É candidato a um detector novo de "prompt fixo grande".
 3. **Bug do tokenprof encontrado pelo experimento e corrigido:** o smolagents envia as saídas de ferramenta como mensagem de usuário ("Observation: …"), não com o papel `tool`. Na primeira análise o tokenprof não enxergou nada no smolagents. Agora reconhece esse formato, com teste novo (17 de 17 passando).
-4. **LangGraph ficou de fora:** com o adaptador `langchain-openai`, o Gemini atual recusa a segunda chamada (erro 400: falta a `thought_signature` das chamadas de função, que o adaptador descarta). O modelo antigo que não exige isso (`gemini-2.5-flash-lite`) não está disponível para contas novas.
+4. **LangGraph ficou para a próxima rodada:** com o adaptador `langchain-openai`, o Gemini atual recusa a segunda chamada (erro 400: falta a `thought_signature` das chamadas de função, que o adaptador descarta). O modelo antigo que não exige isso (`gemini-2.5-flash-lite`) não está disponível para contas novas. **Próximo passo:** o adaptador mantém o ID de cada chamada de ferramenta, então o proxy pode guardar a assinatura pelo ID e recolocá-la na requisição seguinte, num modo opcional (porque aí o proxy passa a alterar a requisição, e não só registrar).
 5. **Nenhum alarme falso na versão corrigida:** 0 desperdício apontado.
 
 ### Limites
@@ -185,3 +185,42 @@ Na primeira tentativa, o Ollama tentou usar a GPU integrada Intel pelo backend V
 - **Latência não melhorou** de forma consistente (OpenAI Agents SDK: 35,0 s → 45,8 s somados; smolagents: 43,2 s nos dois). No nível gratuito a latência varia muito, então ela não entra como resultado.
 - Custo em dinheiro não foi medido (nível gratuito). Pelos tokens, a economia em uma API paga seria proporcional aos −56% de tokens de prompt.
 - O cache do Gemini quase não apareceu (4 chamadas na linha de base, 0 na corrigida), então os detectores de cache não foram exercitados neste experimento.
+---
+
+## 2026-11-06: LangGraph adicionado ao experimento (modo que recoloca as assinaturas do Gemini)
+
+### O que foi implementado
+
+- **Causa do erro 400:** o Gemini devolve `tool_calls[].extra_content.google.thought_signature` e exige que esse campo volte no histórico. O `langchain-openai` descarta o campo, mas mantém o ID da chamada de ferramenta. O OpenAI Agents SDK devolve o campo, e o smolagents transforma as chamadas em texto, por isso os dois não tinham o problema.
+- **Solução:** opção `--restore-thought-signatures` no proxy (desligada por padrão). O proxy guarda o `extra_content` de cada chamada de ferramenta pelo ID, até 10 mil, descartando as mais antigas, e o recoloca nas chamadas do assistente que chegam sem ele. Nunca sobrescreve um `extra_content` que o cliente mandou, e nunca inventa assinatura para um ID desconhecido. O registro guarda a requisição como o cliente mandou, mais o campo `restored_signatures` com a contagem.
+- `pytest`: **21 de 21 passaram** (4 novos: com a opção ligada, em streaming, com ela desligada, e sem sobrescrever nem inventar).
+
+### Resultado no experimento (mesma montagem, `gemini-3.5-flash-lite`, 2 repetições)
+
+| LangGraph 1.2.20 + `langchain-openai` 1.7.4 | Linha de base | Corrigido | Diferença |
+|---|---|---|---|
+| Acertos | 20/20 | 20/20 | igual |
+| Chamadas por tarefa | 2,0 | 2,1 | +0,1 |
+| Tokens de prompt (total) | 59.582 | 11.676 | **−80,4%** |
+| Tokens de prompt por tarefa | 2.979 | 584 | **−80,4%** |
+| Saídas de ferramenta, % do prompt | 81,9% | 16,4% | — |
+| Desperdício apontado pelo tokenprof | 40.275 (68%) | 0 | — |
+| Assinaturas recolocadas pelo proxy | 20 em 40 chamadas | — | 0 erros |
+
+**Registros:** linha de base ([`trace`](results/2026-11-06-exp-baseline-langgraph.jsonl), [`respostas`](results/2026-11-06-exp-baseline-langgraph-answers.jsonl), [`relatório`](results/2026-11-06-exp-baseline-langgraph-report.html)) e corrigido ([`trace`](results/2026-11-06-exp-fixed-langgraph.jsonl), [`respostas`](results/2026-11-06-exp-fixed-langgraph-answers.jsonl), [`relatório`](results/2026-11-06-exp-fixed-langgraph-report.html)).
+
+### Os três frameworks juntos
+
+| | Linha de base | Corrigido | Diferença |
+|---|---|---|---|
+| Acertos | 60/60 | 60/60 | igual |
+| Tokens de prompt, LangGraph | 59.582 | 11.676 | −80,4% |
+| Tokens de prompt, OpenAI Agents SDK | 61.622 | 13.818 | −77,6% |
+| Tokens de prompt, smolagents | 105.317 | 59.806 | −43,2% |
+| **Tokens de prompt, total** | **226.521** | **85.300** | **−62,3%** |
+
+### Limites
+
+- Os mesmos do piloto (tarefas simples, API sintética, um modelo, latência não comparável no nível gratuito).
+- O LangGraph rodou num lote separado, depois dos outros dois, no mesmo dia e com o mesmo modelo.
+- Na rodada do LangGraph, o proxy alterava as requisições (recolocando as assinaturas). Isso não muda os tokens de forma relevante, porque a assinatura tem cerca de 100 caracteres por chamada, mas fica registrado.

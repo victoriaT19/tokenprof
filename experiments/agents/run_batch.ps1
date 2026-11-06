@@ -6,7 +6,9 @@ param(
     [Parameter(Mandatory)] [string] $Name,
     [string[]] $Frameworks = @("smolagents", "openai_agents"),
     [int] $Reps = 2,
-    [string] $Model = "gemini-3.5-flash-lite"
+    [string] $Model = "gemini-3.5-flash-lite",
+    # Needed for LangGraph: langchain-openai drops Gemini's thought signatures.
+    [switch] $RestoreSignatures
 )
 $ErrorActionPreference = "Stop"
 $exp = $PSScriptRoot
@@ -16,8 +18,9 @@ $date = Get-Date -Format "yyyy-MM-dd"
 $trace = "$results\$date-exp-$Name.jsonl"
 $answers = "$results\$date-exp-$Name-answers.jsonl"
 
-$proxy = Start-Process -WindowStyle Hidden -PassThru -FilePath "$repo\.venv\Scripts\tokenprof.exe" `
-    -ArgumentList "proxy", "--upstream", "https://generativelanguage.googleapis.com/v1beta/openai", "--out", $trace, "--port", "8788"
+$proxyArgs = @("proxy", "--upstream", "https://generativelanguage.googleapis.com/v1beta/openai", "--out", $trace, "--port", "8788")
+if ($RestoreSignatures) { $proxyArgs += "--restore-thought-signatures" }
+$proxy = Start-Process -WindowStyle Hidden -PassThru -FilePath "$repo\.venv\Scripts\tokenprof.exe" -ArgumentList $proxyArgs
 Start-Sleep -Seconds 3
 $env:PYTHONIOENCODING = "utf-8"
 try {

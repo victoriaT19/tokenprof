@@ -37,6 +37,8 @@ client.chat.completions.create(
 
 Each chat completion (streaming or not) becomes one line in `traces.jsonl`: request, response, token usage (including cached tokens), latency, time to first token and estimated cost. The optional `X-Tokenprof-*` headers group calls by agent run and step; they are not forwarded upstream. API keys are forwarded but never written to the trace. Traces do contain the prompts, so keep them local.
 
+**Gemini and `langchain-openai`.** Current Gemini models return a thought signature on each tool call and reject follow-up requests that drop it, which `langchain-openai` (and so LangGraph) does. `--restore-thought-signatures` makes the proxy remember each signature by tool call id and put it back. It is off by default because it changes requests; each trace records how many signatures it restored, and the trace keeps the request as the client sent it.
+
 Prices change often, so none are built in. `--pricing` takes a JSON file with USD per million tokens; see [`pricing.example.json`](pricing.example.json).
 
 ## Roadmap
@@ -47,20 +49,22 @@ Prices change often, so none are built in. `--pricing` takes a JSON file with US
 - [x] `tokenprof analyze traces.jsonl` → HTML report
 - [x] Pilot experiment on open-source agent frameworks (tokens before/after, task accuracy)
 - [ ] Detector for large static prompts (found in the pilot: smolagents' default system prompt)
+- [x] Opt-in proxy mode that restores Gemini `thought_signature`s dropped by `langchain-openai` (LangGraph added to the pilot)
 - [ ] PyPI release
 
 ## Results
 
-**Pilot on open-source agent frameworks.** Two popular frameworks, used with their defaults, answered 10 order questions against a fake store API (`gemini-3.5-flash-lite`, 2 repetitions). tokenprof found that tool outputs made up 76% (OpenAI Agents SDK) and 43% (smolagents) of all prompt tokens, mostly unused. Applying its suggestion, returning only the fields the agent needs, gave:
+**Pilot on open-source agent frameworks.** Three popular frameworks, used with their defaults, answered 10 order questions against a fake store API (`gemini-3.5-flash-lite`, 2 repetitions). tokenprof found that tool outputs made up 82% (LangGraph), 76% (OpenAI Agents SDK) and 43% (smolagents) of all prompt tokens, mostly unused. Applying its suggestion, returning only the fields the agent needs, gave:
 
 | | Baseline | Fixed |
 |---|---|---|
-| Correct answers | 40/40 | 40/40 |
+| Correct answers | 60/60 | 60/60 |
+| Prompt tokens, LangGraph | 59,582 | 11,676 (**−80.4%**) |
 | Prompt tokens, OpenAI Agents SDK | 61,622 | 13,818 (**−77.6%**) |
 | Prompt tokens, smolagents | 105,317 | 59,806 (**−43.2%**) |
-| Prompt tokens, total | 166,939 | 73,624 (**−55.9%**) |
+| Prompt tokens, total | 226,521 | 85,300 (**−62.3%**) |
 
-After the fix, smolagents' default system prompt is 74% of its prompt tokens, so it still spends 4.3× more per task than the OpenAI Agents SDK. This is a small pilot with simple tasks and a synthetic API; see the setup, raw traces and limits in [docs/test-log.md](docs/test-log.md) and [experiments/agents](experiments/agents).
+After the fix, smolagents' default system prompt is 74% of its prompt tokens, so it still spends 4–5× more per task than the other two. LangGraph needed the proxy's `--restore-thought-signatures` mode to run on current Gemini models (see below). This is a small pilot with simple tasks and a synthetic API; see the setup, raw traces and limits in [docs/test-log.md](docs/test-log.md) and [experiments/agents](experiments/agents).
 
 **Detector validation (demo agent with planted waste).** A small support agent looked up 3 orders through a local model (Ollama, `qwen2.5:0.5b`) in two modes: one with a timestamp in the system prompt and a tool that returns the full order record, and one with the fixes tokenprof suggested. tokenprof flagged both planted problems in every run of the wasteful mode and raised no findings on the fixed one.
 

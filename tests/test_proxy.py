@@ -177,6 +177,90 @@ def test_accumulator_handles_lines_split_across_chunks_and_tool_calls():
     assert record["response"]["finish_reason"] == "tool_calls"
 
 
+SIGNATURE = {"google": {"thought_signature": "c2lnbmF0dXJl"}}
+
+
+def signature_upstream(seen, stream=False):
+    """Fake Gemini: the first call returns a signed tool call, later calls record what they got."""
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        body = json.loads(request.content)
+        seen.append(body)
+        if len(seen) > 1:
+            return httpx.Response(200, json={"choices": [{"message": {"content": "ok"}, "finish_reason": "stop"}]})
+        call = {"id": "call_1", "type": "function", "function": {"name": "busca", "arguments": "{}"}, "extra_content": SIGNATURE}
+        if stream:
+            delta = {**call, "index": 0}
+            return httpx.Response(200, content=sse({"choices": [{"index": 0, "delta": {"tool_calls": [delta]}, "finish_reason": "tool_calls"}]}),
+                                  headers={"content-type": "text/event-stream"})
+        return httpx.Response(200, json={"choices": [{"message": {"content": None, "tool_calls": [call]}, "finish_reason": "tool_calls"}]})
+
+    return handler
+
+
+def follow_up(*extra_messages):
+    """The second request as langchain-openai sends it: same tool call id, extra_content dropped."""
+    dropped = {"id": "call_1", "type": "function", "function": {"name": "busca", "arguments": "{}"}}
+    return {"model": "test-model", "messages": [
+        {"role": "user", "content": "oi"},
+        {"role": "assistant", "content": None, "tool_calls": [dropped]},
+        {"role": "tool", "tool_call_id": "call_1", "content": "{}"},
+        *extra_messages,
+    ]}
+
+
+def test_dropped_thought_signatures_are_restored_when_enabled(tmp_path):
+    seen = []
+    client, path = make_client(tmp_path, signature_upstream(seen), restore_thought_signatures=True)
+    with client:
+        client.post("/v1/chat/completions", json={"model": "test-model", "messages": [{"role": "user", "content": "oi"}]})
+        client.post("/v1/chat/completions", json=follow_up())
+
+    assert seen[1]["messages"][1]["tool_calls"][0]["extra_content"] == SIGNATURE
+    first, second = read_traces(path)
+    assert first["restored_signatures"] == 0
+    assert second["restored_signatures"] == 1
+    # The trace keeps the request as the client sent it.
+    assert "extra_content" not in second["request"]["messages"][1]["tool_calls"][0]
+
+
+def test_signatures_from_streamed_tool_calls_are_restored(tmp_path):
+    seen = []
+    client, _ = make_client(tmp_path, signature_upstream(seen, stream=True), restore_thought_signatures=True)
+    with client:
+        client.post("/v1/chat/completions", json={"model": "test-model", "stream": True, "messages": [{"role": "user", "content": "oi"}]})
+        client.post("/v1/chat/completions", json=follow_up())
+
+    assert seen[1]["messages"][1]["tool_calls"][0]["extra_content"] == SIGNATURE
+
+
+def test_signatures_are_left_alone_by_default(tmp_path):
+    seen = []
+    client, path = make_client(tmp_path, signature_upstream(seen))
+    with client:
+        client.post("/v1/chat/completions", json={"model": "test-model", "messages": [{"role": "user", "content": "oi"}]})
+        client.post("/v1/chat/completions", json=follow_up())
+
+    assert "extra_content" not in seen[1]["messages"][1]["tool_calls"][0]
+    assert all("restored_signatures" not in r for r in read_traces(path))
+
+
+def test_restoring_never_overwrites_or_invents_signatures(tmp_path):
+    seen = []
+    client, _ = make_client(tmp_path, signature_upstream(seen), restore_thought_signatures=True)
+    own = {"google": {"thought_signature": "b3V0cmE="}}
+    unknown = {"role": "assistant", "content": None,
+               "tool_calls": [{"id": "call_9", "type": "function", "function": {"name": "busca", "arguments": "{}"}}]}
+    body = follow_up(unknown)
+    body["messages"][1]["tool_calls"][0]["extra_content"] = own
+    with client:
+        client.post("/v1/chat/completions", json={"model": "test-model", "messages": [{"role": "user", "content": "oi"}]})
+        client.post("/v1/chat/completions", json=body)
+
+    assert seen[1]["messages"][1]["tool_calls"][0]["extra_content"] == own
+    assert "extra_content" not in seen[1]["messages"][3]["tool_calls"][0]
+
+
 def test_pricing_falls_back_to_longest_prefix():
     pricing = Pricing({"model": ModelPrice(1, 1), "model-large": ModelPrice(5, 5)})
     assert pricing.lookup("model-large-2025-01-01") == ModelPrice(5, 5)

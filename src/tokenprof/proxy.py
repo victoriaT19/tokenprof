@@ -7,6 +7,12 @@ completions (streaming or not) are relayed unchanged and logged; every other
 Optional request headers group calls for the profiler and are never forwarded:
   X-Tokenprof-Run   identifies one agent run
   X-Tokenprof-Step  names the agent step that made the call
+
+With restore_thought_signatures on, the proxy also changes requests: Gemini
+returns a thought signature in tool_calls[].extra_content and rejects follow-up
+requests whose tool calls lack it. Some clients (langchain-openai) drop that
+field but keep the tool call id, so the proxy remembers extra_content by id and
+puts it back. Each trace records how many it restored.
 """
 
 from __future__ import annotations
@@ -15,6 +21,7 @@ import copy
 import json
 import time
 import uuid
+from collections import OrderedDict
 from contextlib import asynccontextmanager
 from datetime import datetime, timezone
 from typing import Any, AsyncIterator
@@ -39,6 +46,35 @@ _DROP_REQUEST_HEADERS = {
 }
 _DROP_RESPONSE_HEADERS = {"content-length", "content-encoding", "transfer-encoding", "connection"}
 _MAX_ERROR_BODY = 4000
+_MAX_REMEMBERED_SIGNATURES = 10_000
+
+
+class _SignatureStore:
+    """extra_content of recent tool calls, by tool call id (oldest dropped first)."""
+
+    def __init__(self, limit: int = _MAX_REMEMBERED_SIGNATURES) -> None:
+        self._items: OrderedDict[str, Any] = OrderedDict()
+        self._limit = limit
+
+    def remember(self, tool_calls: list[dict[str, Any]] | None) -> None:
+        for call in tool_calls or []:
+            if call.get("id") and call.get("extra_content"):
+                self._items[call["id"]] = call["extra_content"]
+                self._items.move_to_end(call["id"])
+        while len(self._items) > self._limit:
+            self._items.popitem(last=False)
+
+    def restore(self, body: dict[str, Any]) -> int:
+        """Put remembered extra_content back on assistant tool calls that lack it."""
+        restored = 0
+        for message in body.get("messages") or []:
+            if message.get("role") != "assistant":
+                continue
+            for call in message.get("tool_calls") or []:
+                if "extra_content" not in call and call.get("id") in self._items:
+                    call["extra_content"] = copy.deepcopy(self._items[call["id"]])
+                    restored += 1
+        return restored
 
 
 def create_app(
@@ -47,6 +83,7 @@ def create_app(
     pricing: Pricing | None = None,
     *,
     inject_stream_usage: bool = True,
+    restore_thought_signatures: bool = False,
     transport: httpx.AsyncBaseTransport | None = None,
 ) -> FastAPI:
     """Build the proxy app.
@@ -55,9 +92,12 @@ def create_app(
         prefix (e.g. "https://api.openai.com/v1" or "http://localhost:11434/v1").
     inject_stream_usage: ask for token usage on streaming requests
         (stream_options.include_usage) when the client did not set stream_options.
+    restore_thought_signatures: put back tool call extra_content (Gemini thought
+        signatures) that the client dropped; see the module docstring.
     transport: custom httpx transport, used by the tests.
     """
     base_url = upstream.rstrip("/")
+    signatures = _SignatureStore() if restore_thought_signatures else None
     client = httpx.AsyncClient(transport=transport, timeout=httpx.Timeout(600.0, connect=10.0))
 
     @asynccontextmanager
@@ -85,6 +125,8 @@ def create_app(
         stream = bool(body.get("stream"))
         if stream and inject_stream_usage and "stream_options" not in body:
             body["stream_options"] = {"include_usage": True}
+        if signatures is not None:
+            record["restored_signatures"] = signatures.restore(body)
 
         upstream_request = client.build_request(
             "POST",
@@ -105,6 +147,8 @@ def create_app(
 
         if not stream:
             _record_completion(record, upstream_response)
+            if signatures is not None and record["response"]:
+                signatures.remember(record["response"]["tool_calls"])
             await finish(record, started)
             return Response(upstream_response.content, upstream_response.status_code, headers=headers)
 
@@ -123,6 +167,8 @@ def create_app(
             finally:
                 await upstream_response.aclose()
                 acc.apply(record)
+                if signatures is not None:
+                    signatures.remember(record["response"]["tool_calls"])
                 if error_body:
                     record["error"] = error_body[:_MAX_ERROR_BODY].decode("utf-8", errors="replace")
                 await finish(record, started)
@@ -242,6 +288,8 @@ class _StreamAccumulator:
                 )
                 if call.get("id"):
                     slot["id"] = call["id"]
+                if call.get("extra_content"):
+                    slot["extra_content"] = call["extra_content"]
                 function = call.get("function") or {}
                 slot["function"]["name"] += function.get("name") or ""
                 slot["function"]["arguments"] += function.get("arguments") or ""

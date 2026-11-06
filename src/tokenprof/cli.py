@@ -31,6 +31,11 @@ def main(argv: list[str] | None = None) -> None:
         action="store_true",
         help="do not add stream_options.include_usage to streaming requests",
     )
+    proxy.add_argument(
+        "--restore-thought-signatures",
+        action="store_true",
+        help="put back Gemini thought signatures that the client dropped from tool calls (changes requests)",
+    )
 
     report = commands.add_parser("analyze", help="analyze a trace file and write an HTML report")
     report.add_argument("traces", help="JSONL file written by the proxy")
@@ -54,6 +59,7 @@ def main(argv: list[str] | None = None) -> None:
             TraceWriter(args.out),
             Pricing.from_file(args.pricing) if args.pricing else None,
             inject_stream_usage=not args.no_stream_usage,
+            restore_thought_signatures=args.restore_thought_signatures,
         )
         uvicorn.run(app, host=args.host, port=args.port)
 

@@ -1,6 +1,6 @@
 # Experiment: tokenprof on open-source agent frameworks
 
-Popular agent frameworks, used with their defaults, answer 10 questions about orders in a fake store. Every call goes through the tokenprof proxy. The baseline is analyzed, the fixes tokenprof suggests are applied, and the run is repeated to compare prompt tokens and accuracy.
+Three popular agent frameworks, used with their defaults, answer 10 questions about orders in a fake store. Every call goes through the tokenprof proxy. The baseline is analyzed, the fixes tokenprof suggests are applied, and the run is repeated to compare prompt tokens and accuracy.
 
 ## Setup
 
@@ -32,15 +32,16 @@ tokenprof analyze ..\..\docs\results\<date>-exp-baseline.jsonl --out baseline.ht
 |---|---|---|
 | smolagents (`ToolCallingAgent`) | 1.26.0 | included |
 | OpenAI Agents SDK (`OpenAIChatCompletionsModel`) | 0.24.0 | included |
-| LangGraph (`create_react_agent` + `langchain-openai`) | 1.2.20 / 1.7.4 | excluded: current Gemini models reject its follow-up requests (400, missing `thought_signature` on function calls); the older model that does not require it is no longer available to new API users |
+| LangGraph (`create_react_agent` + `langchain-openai`) | 1.2.20 / 1.7.4 | included, with the proxy's `--restore-thought-signatures` (run `run_batch.ps1 -Frameworks langgraph -RestoreSignatures`): the adapter drops Gemini's thought signatures, which current models require on follow-up requests |
 
 ## Results (2026-11-06)
 
 | | Baseline (`full`) | Fixed (`compact`) |
 |---|---|---|
-| Correct answers | 40/40 | 40/40 |
+| Correct answers | 60/60 | 60/60 |
+| Prompt tokens per task, LangGraph | 2,979 | 584 (−80.4%) |
 | Prompt tokens per task, OpenAI Agents SDK | 3,081 | 691 (−77.6%) |
 | Prompt tokens per task, smolagents | 5,266 | 2,990 (−43.2%) |
-| Prompt tokens, total | 166,939 | 73,624 (−55.9%) |
+| Prompt tokens, total | 226,521 | 85,300 (−62.3%) |
 
 Full numbers, findings and limits are in [`docs/test-log.md`](../../docs/test-log.md).
