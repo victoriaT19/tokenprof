@@ -18,7 +18,7 @@ Three profiler-guided interventions (prompt rules, a context-budget fix, and bot
 
 ## 1. Introduction
 
-The Gemma 4 Developer Agent competition asks for an offline agent that fixes real issues in Python repositories, using one Gemma 4 model and a declarative ADK configuration on 4× L4 GPUs, scored by the share of tasks whose hidden tests pass. That single number does not say *why* an agent fails. With resolution rates under 10% on about a hundred tasks, it is also too noisy to say whether a change helped. On SWE-bench Verified, single-run pass@1 shifts by 2–6 points between identical runs (Bjarnason et al., 2026). The standard remedies are more runs and paired tests (Miller, 2024), and more runs are exactly what a weekly GPU quota does not allow.
+The Gemma 4 Developer Agent competition asks for an offline agent that fixes real issues in Python repositories, using one Gemma 4 model and a declarative ADK configuration on 4× L4 GPUs, scored by the share of tasks whose hidden tests pass. That single number does not say *why* an agent fails. With resolution rates under 10% on 129 tasks, it is also too noisy to say whether a change helped. On SWE-bench Verified, single-run pass@1 shifts by 2–6 points between identical runs (Bjarnason et al., 2026). The standard remedies are more runs and paired tests (Miller, 2024), and more runs are exactly what a weekly GPU quota does not allow.
 
 For a 2–4B model in a 32k window, waste is a capability problem: boilerplate displaces code the model needs, and every malformed tool call burns a turn. We argue that improving such agents should start where performance engineering starts: with a profiler. Prior token analyses of coding agents measure the *cost* of frontier models (Bai et al., 2026), and failure taxonomies are built by hand (Liu et al., 2025). We instead rebuild every prompt of a small model from its trace, including the parts the trace omits, and detect failures automatically on every run.
 
@@ -91,7 +91,7 @@ Unit tests on synthetic trajectories check each detector, the overhead fit (it r
 | Tool schemas + template (fitted) | 10.9% | 11.1% |
 | Task prompt (workspace tree alone) | 16.7% (7.7%) | 16.9% (8.0%) |
 
-**Finding 1: a 40% fixed prefix.** The system prompt, tool schemas and task prompt take about 3,700 tokens before the agent acts and are resent on every call. Prefix caching makes them cheap to compute, but they still occupy the window; the workspace tree alone is 7.7% of all prompt tokens.
+**Finding 1: a 40% fixed prefix.** The system prompt, tool schemas and task prompt take about 3,700 tokens before the agent acts and are resent on every call. Prefix caching makes them cheap to compute, but they still occupy the window.
 
 **Finding 2: blind reads and broken edits.** In 107 of 129 E4B runs, the agent called `read_file` without a range on a long file and got its first 150 lines, usually imports. `edit_file` then fails 38% (E4B) and 70% (E2B) of the time.
 
@@ -145,7 +145,7 @@ Each intervention targets detector findings:
 
 For E2B, both window and full removed every context overflow (29% → 0%\*\*) and cut runs with no submission from 30% to 9%\*\* and 2%\*\*. full also raised ranged reads from 9% to 40%\*\* and the share of runs that executed code from 53% to 74%\*\*.
 
-**Noise control.** We re-ran the E4B baseline unchanged. It resolved 9 tasks against 10 (8 shared; McNemar p = 1.00). No behaviour metric in Table 4 differed significantly between the two (all p ≥ 0.08; e.g. blind truncated reads 83% vs 86%, edit success 62% vs 63%), so the shifts in Table 4 are not what re-running alone produces. The control also exposes noisy metrics: context overflows went from 9 to 16 runs, which makes window's drop to 0 more telling. Across all five E4B runs, 21 different tasks were solved at least once, against 9 to 12 per run.
+**Noise control.** We re-ran the E4B baseline unchanged. It resolved 9 tasks against 10 (8 shared; McNemar p = 1.00). No behaviour metric in Table 4 differed significantly (all p ≥ 0.08; e.g. blind truncated reads 83% vs 86%, edit success 62% vs 63%), so the shifts in Table 4 are not what re-running alone produces. The control also exposes noisy metrics: context overflows went from 9 to 16 runs, which makes window's drop to 0 more telling. Across all five E4B runs, 21 different tasks were solved at least once, against 9 to 12 per run.
 
 **Reading the results.**
 
@@ -177,11 +177,11 @@ For E2B, both window and full removed every context overflow (29% → 0%\*\*) an
 
 **Benchmarks and interfaces.** SWE-bench (Jimenez et al., 2024) defined test-verified issue resolution. SWE-agent (Yang et al., 2024) showed that the agent–computer interface changes resolution rates. Our read and edit findings are that phenomenon, measured automatically for small models.
 
-**Evaluation noise.** Bjarnason et al. (2026) ran about 60,000 SWE-bench Verified trajectories and found that improvements of 2–3 points can be noise. Miller (2024) recommends paired, question-level tests. We confirm it with a controlled re-run and add a complement for compute-limited settings: testing the targeted behaviour.
+**Evaluation noise.** Bjarnason et al. (2026) ran about 60,000 SWE-bench Verified trajectories and found that 2–3 point improvements can be noise; Miller (2024) recommends paired, question-level tests. We add a controlled re-run and, for compute-limited settings, behaviour tests.
 
 **Trajectories and tokens.** Liu et al. (2025) built a manual taxonomy of 150 failed issues across localization, repair and validation. Bai et al. (2026) analyzed token consumption of eight frontier models on SWE-bench Verified, finding that input tokens dominate cost and that repeated file views mark expensive runs. tokenprof works per call from the trajectory alone, recovers what the trace omits (tool schemas, compaction), and targets small models, for which the 32k window, not price, is the binding constraint.
 
-**Context and small models.** Lindenbauer et al. (2025) showed that masking old observations is as effective as LLM summarization for SWE agents. For small models, training data (SWE-Gym, Pan et al., 2024; SWE-smith, Yang et al., 2025) is the usual lever, and SWE-Protégé (2026) reports pervasive action looping in 7B agents, consistent with the repetition loops we detect. The traces we profile use ATIF, the trajectory format of the Harbor framework.
+**Context and small models.** Lindenbauer et al. (2025) showed that masking old observations is as effective as LLM summarization for SWE agents. For small models, training data (SWE-Gym, Pan et al., 2024; SWE-smith, Yang et al., 2025) is the usual lever, and SWE-Protégé (Kon et al., 2026) reports pervasive action looping in 7B agents, consistent with the repetition loops we detect. The traces we profile use ATIF, the trajectory format of the Harbor framework.
 
 ## 9. Reproducibility
 
@@ -199,6 +199,6 @@ The profiler, Kaggle runner, configurations, comparison scripts and all eight ru
 - Lindenbauer, T., et al. The Complexity Trap: Simple Observation Masking Is as Efficient as LLM Summarization for Agent Context Management. NeurIPS 2025 (arXiv:2508.21433).
 - Pan, J., et al. Training Software Engineering Agents and Verifiers with SWE-Gym. arXiv:2412.21139, 2024.
 - Yang, J., et al. SWE-smith: Scaling Data for Software Engineering Agents. NeurIPS 2025 (arXiv:2504.21798).
-- SWE-Protégé. arXiv:2602.22124, 2026.
+- Kon, P. T. J., et al. SWE-Protégé: Learning to Selectively Collaborate With an Expert Unlocks Small Language Models as Software Engineering Agents. arXiv:2602.22124, 2026.
 - Harbor framework: Agent Trajectory Interchange Format (ATIF). https://harborframework.com/docs/trajectory-format
 - Markowitz, E., Perozzi, B., Rózemberczki, B., et al. Google - The Gemma 4 Developer Agent Competition. Kaggle, 2026.
