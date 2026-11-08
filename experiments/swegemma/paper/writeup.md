@@ -1,4 +1,4 @@
-# Resolution Rate Is Not Enough: Profiling Small Gemma 4 Coding Agents from Their Traces
+# Resolution Rate Is Not Enough: Profiling Small Gemma 4 Agents from Traces
 
 **tokenprof: an open profiler that turns SWE-agent trajectories into a token anatomy, failure detectors and testable behaviour metrics**
 

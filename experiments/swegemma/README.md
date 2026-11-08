@@ -2,7 +2,7 @@
 
 Profiling small Gemma 4 coding agents (E4B and E2B) on the 129 public tasks of the [Gemma 4 Developer Agent competition](https://www.kaggle.com/competitions/gemma-4-developer-agent), with `tokenprof swe`.
 
-**Paper:** [`paper/writeup.md`](paper/writeup.md), *Resolution Rate Is Not Enough: Profiling Small Gemma 4 Coding Agents from Their Traces*.
+**Paper:** [`paper/writeup.md`](paper/writeup.md), *Resolution Rate Is Not Enough: Profiling Small Gemma 4 Agents from Traces*.
 
 ## What is where
 
