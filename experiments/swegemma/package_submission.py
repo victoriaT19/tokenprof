@@ -1,11 +1,13 @@
 """Package a config folder as a competition submission.zip.
 
 Usage:
-    python package_submission.py submissions/full --model gemma-4-e4b-it-qat-w4a16-ct --out dist/full_e4b.zip
+    python package_submission.py submissions/full --model gemma-4-e4b-it-qat-w4a16-ct --out dist/full_e4b/submission.zip
+    kaggle competitions submit gemma-4-developer-agent -f dist/full_e4b/submission.zip -m "..."
 
 Sets every `model:` line to --model, writes eval_config.yaml with the per-task
 budget below, and checks the rules from the harness README (allowed extensions,
-no symlinks, root agent.yaml, < 3 GiB) before zipping.
+no symlinks, root agent.yaml, < 3 GiB) before zipping. Kaggle rejects the
+upload (HTTP 400) unless the file is named exactly submission.zip.
 """
 
 import argparse
@@ -65,6 +67,8 @@ def main() -> None:
     assert models == {args.model}, models
 
     out = Path(args.out)
+    if out.name != "submission.zip":
+        raise SystemExit("--out must end in submission.zip (Kaggle rejects any other file name)")
     out.parent.mkdir(parents=True, exist_ok=True)
     with zipfile.ZipFile(out, "w", zipfile.ZIP_DEFLATED) as zf:
         for name, data in files.items():

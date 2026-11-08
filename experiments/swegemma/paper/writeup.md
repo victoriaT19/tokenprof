@@ -13,7 +13,7 @@ On all 129 public tasks, the official sample configuration resolves 10 tasks wit
 - `edit_file` fails 38% (E4B) to 70% (E2B) of the time;
 - the sample's `max_output_tokens: 16384` reserves half the 32k window, which killed 29% of E2B runs with a context error.
 
-We then test three profiler-guided interventions: prompt rules, a context-budget fix, and both. Each changed the behaviour it targeted, significantly (Fisher's exact test, p < 0.01): blind reads dropped from 83% to 54% of runs, and context overflows dropped from 29% to 0% (E2B). However, no resolution difference reached significance (E4B: 10, 12, 12 and 10 tasks; McNemar p ≥ 0.73). Four E4B runs together solved 21 different tasks. At this scale, a leaderboard number cannot tell configurations apart, but a trace profile can.
+We then test three profiler-guided interventions: prompt rules, a context-budget fix, and both. Each changed the behaviour it targeted, significantly (Fisher's exact test, p < 0.01): blind reads dropped from 83% to 54% of runs, and context overflows dropped from 29% to 0% (E2B). However, no resolution difference reached significance (E4B: 10, 12, 12 and 10 tasks; McNemar p ≥ 0.73). An unchanged re-run of the baseline solved 9 tasks and showed no significant behaviour change, and five E4B runs together solved 21 different tasks. At this scale, a leaderboard number cannot tell configurations apart, but a trace profile can.
 
 ## 1. Introduction
 
@@ -30,7 +30,7 @@ Contributions:
 
    Companion scripts run any configuration on Kaggle's 4× L4 machines, test resolution task by task (exact McNemar) and test behaviour metrics (Fisher's exact).
 2. **A profile** of Gemma 4 E4B and E2B on all 129 public tasks.
-3. **An ablation** of profiler-guided interventions: seven full runs, 903 task attempts, all traces released.
+3. **An ablation** of profiler-guided interventions, with an unchanged re-run of the baseline as a noise control: eight full runs, 1,032 task attempts, all traces released.
 4. **Findings for harness designers**: half-window output reservation, untraced compaction, a forced post-submit call, and a large static task prompt.
 
 ## 2. Setup
@@ -163,7 +163,7 @@ All runs use the same 129 tasks and budgets.
 
 For E2B, both window and full removed every context overflow (29% → 0%\*\*) and cut runs with no submission from 30% to 9%\*\* and 2%\*\*. full also raised ranged reads from 9% to 40%\*\* and the share of runs that executed code from 53% to 74%\*\*.
 
-**Noise.** Re-running the E4B baseline unchanged gave [R2: resolved, overlap, McNemar p, and the behaviour rows for base vs base]. Across the four E4B configurations, 21 different tasks were solved at least once, against 10 to 12 per run.
+**Noise control.** We re-ran the E4B baseline unchanged. It resolved 9 tasks against 10: 8 in common, 2 only in the first run and 1 only in the re-run (McNemar p = 1.00). None of the behaviour metrics in Table 4 differed significantly between the two runs (all p ≥ 0.08). Ranged reads were 47% vs 42%, blind truncated reads 83% vs 86%, and edit success 62% vs 63%. So the significant shifts in Table 4 are not what re-running alone produces. The control also shows which metrics are noisy: context overflows went from 9 to 16 runs between identical runs, which makes window's drop to 0 the more telling. Across all five E4B runs, 21 different tasks were solved at least once, against 9 to 12 per run.
 
 **Reading the results.**
 
@@ -186,7 +186,7 @@ For E2B, both window and full removed every context overflow (29% → 0%\*\*) an
 
 ## 7. Limitations
 
-- We use the 129 public tasks, not the hidden set, and run most configurations once.
+- We use the 129 public tasks, not the hidden set. Each intervention ran once; only the E4B baseline was repeated.
 - The anatomy split is apportioned by characters: exact in total, estimated per part.
 - Compaction is inferred from prompt drops, and its summarization calls are invisible.
 - The guided rules were written after seeing the baseline profile, so behaviour gains on the same tasks may overstate gains on new ones.
@@ -194,11 +194,11 @@ For E2B, both window and full removed every context overflow (29% → 0%\*\*) an
 
 ## 8. Related work
 
-SWE-bench (Jimenez et al., 2024) defined issue resolution verified by tests; the competition harness follows its protocol. SWE-agent (Yang et al., 2024) showed that the agent–computer interface matters: a windowed file viewer and guarded edit commands change resolution rates. Our truncated-read and failed-edit findings are the same phenomenon, measured from traces for small models. Agentless (Xia et al., 2024) showed that a fixed localize–repair–validate pipeline competes with free-form agents, consistent with small agents wasting turns on navigation. vLLM (Kwon et al., 2023) provides the paged attention and prefix caching the harness uses. [verify references]
+SWE-bench (Jimenez et al., 2024) defined issue resolution verified by tests; the competition harness follows its protocol. SWE-agent (Yang et al., 2024) showed that the agent–computer interface matters: a windowed file viewer and guarded edit commands change resolution rates. Our truncated-read and failed-edit findings are the same phenomenon, measured from traces for small models. Agentless (Xia et al., 2024) showed that a fixed localize–repair–validate pipeline competes with free-form agents, consistent with small agents wasting turns on navigation. vLLM (Kwon et al., 2023) provides the paged attention and prefix caching the harness uses.
 
 ## 9. Reproducibility
 
-The profiler, Kaggle runner, configurations, comparison scripts and all seven runs' traces are at [repository link]. Profiling and comparing runs:
+The profiler, Kaggle runner, configurations, comparison scripts and all eight runs' traces are at <https://github.com/victoriaT19/tokenprof> (study in `experiments/swegemma`). Profiling and comparing runs:
 
 ```bash
 pip install -e .
@@ -206,3 +206,11 @@ tokenprof swe experiments/swegemma/results/base_e4b experiments/swegemma/results
 python experiments/swegemma/behaviour.py base_e4b guided_e4b
 python experiments/swegemma/compare.py base_e4b guided_e4b
 ```
+
+## References
+
+- Jimenez, C. E., Yang, J., Wettig, A., Yao, S., Pei, K., Press, O., and Narasimhan, K. SWE-bench: Can Language Models Resolve Real-World GitHub Issues? ICLR 2024.
+- Yang, J., Jimenez, C. E., Wettig, A., Lieret, K., Yao, S., Narasimhan, K., and Press, O. SWE-agent: Agent-Computer Interfaces Enable Automated Software Engineering. NeurIPS 2024.
+- Xia, C. S., Deng, Y., Dunn, S., and Zhang, L. Agentless: Demystifying LLM-based Software Engineering Agents. arXiv:2407.01489, 2024.
+- Kwon, W., Li, Z., Zhuang, S., Sheng, Y., Zheng, L., Yu, C. H., Gonzalez, J. E., Zhang, H., and Stoica, I. Efficient Memory Management for Large Language Model Serving with PagedAttention. SOSP 2023.
+- Markowitz, E., Perozzi, B., Rózemberczki, B., et al. Google - The Gemma 4 Developer Agent Competition. Kaggle, 2026.

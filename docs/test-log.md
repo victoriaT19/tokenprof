@@ -307,5 +307,30 @@ No E2B, `window` e `full` zeraram os estouros de contexto (29% → 0%).
 
 ### Limites
 
-- Só as 129 tasks públicas, e cada configuração rodou uma vez (há uma repetição da base do E4B em andamento para medir o ruído).
+- Só as 129 tasks públicas, e cada intervenção rodou uma vez (a base do E4B foi repetida; veja a entrada seguinte).
 - As regras do `guided` foram escritas depois de ver o perfil da base, nas mesmas tasks.
+
+---
+
+## 2026-11-08: controle de ruído (base do E4B repetida sem mudança nenhuma)
+
+**Ambiente e configuração:** idênticos à rodada `base_e4b` (mesma config, mesmas 129 tasks, mesmo orçamento). Dados em `experiments/swegemma/results/base_e4b_r2/`.
+
+| | base_e4b | base_e4b_r2 |
+|---|---|---|
+| Resolvidas | 10/129 | 9/129 (8 em comum; McNemar p=1,00) |
+| `read_file` com intervalo de linhas | 47% | 42% (Fisher p=0,076) |
+| Tasks com leitura truncada às cegas | 83% | 86% (p=0,61) |
+| Sucesso do `edit_file` | 62% | 63% (p=0,87) |
+| Tasks com estouro de contexto | 7% | 12% (p=0,21) |
+| Tasks sem patch enviado | 9% | 12% (p=0,55) |
+
+**O que isso mostra:**
+
+- Nenhuma métrica de comportamento mudou de forma significativa entre duas rodadas idênticas. As mudanças significativas das intervenções (entrada anterior) não são o que a simples repetição produz.
+- O estouro de contexto varia bastante sozinho (9 → 16 tasks), o que torna a queda para 0 na `window` ainda mais clara.
+- Somando as cinco rodadas do E4B, 21 tasks diferentes foram resolvidas pelo menos uma vez; a repetição não acrescentou nenhuma nova.
+
+### Submissão na competição
+
+`window_e4b` enviada em 2026-11-08 (ref. 58127691), aguardando nota. O Kaggle recusa (HTTP 400) qualquer arquivo que não se chame exatamente `submission.zip`; o `package_submission.py` agora impede isso. Limite: 1 submissão por dia.
