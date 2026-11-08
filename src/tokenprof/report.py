@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from datetime import datetime, timezone
 from html import escape
+from pathlib import PureWindowsPath
 
 from .analyze import PARTS, Analysis, Call
 
@@ -88,7 +89,8 @@ def render_report(analysis: Analysis, source: str = "") -> str:
         "<meta name='viewport' content='width=device-width, initial-scale=1'>",
         f"<title>tokenprof report</title><style>{_CSS}</style></head><body><main>",
         "<h1>tokenprof report</h1>",
-        f"<div class='muted'>{escape(source)} · generated {datetime.now(timezone.utc):%Y-%m-%d %H:%M} UTC</div>",
+        # Only the file name: reports get shared, and a full path exposes the user's folders.
+        f"<div class='muted'>{escape(PureWindowsPath(source).name)} · generated {datetime.now(timezone.utc):%Y-%m-%d %H:%M} UTC</div>",
         "<div class='cards'>",
         *(f"<div class='card'><b>{escape(v)}</b><span>{escape(label)}</span></div>" for v, label in cards),
         "</div>",

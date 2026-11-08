@@ -130,3 +130,11 @@ def test_cli_analyze_writes_report(tmp_path, capsys):
     main(["analyze", str(traces), "--out", str(out), "--min-tool-tokens", "200"])
     assert out.exists()
     assert "estimated waste" in capsys.readouterr().out
+
+
+def test_report_never_shows_the_full_path_of_the_trace_file():
+    analysis = analyze(clean_run())
+    for source in (r"C:\Users\someone\Documents\proj\traces.jsonl", "/home/someone/proj/traces.jsonl", "traces.jsonl"):
+        html = render_report(analysis, source=source)
+        assert "traces.jsonl" in html
+        assert "someone" not in html and "Users" not in html and "home" not in html
