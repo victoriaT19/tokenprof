@@ -2,6 +2,8 @@
 
 **A token profiler for LLM agents.** See where every token goes, find the waste, and fix it.
 
+> **Gemma 4 Developer Agent study.** The paper is [`experiments/swegemma/paper/writeup.md`](experiments/swegemma/paper/writeup.md). Its data, configs and scripts are in [`experiments/swegemma`](experiments/swegemma); see the [layout](#repository-layout) below.
+
 > Status: early development.
 
 ## What it does
@@ -53,7 +55,28 @@ Coding-agent harnesses often save one trajectory per task instead of raw API cal
 tokenprof swe experiments/swegemma/results/base_e4b experiments/swegemma/results/guided_e4b --label base --label guided --md table.md
 ```
 
-The full study (seven runs of 129 tasks with Gemma 4 E4B and E2B, plus the Kaggle runner, configurations, traces and statistical tests) is in [`experiments/swegemma`](experiments/swegemma).
+The full study is in [`experiments/swegemma`](experiments/swegemma): eight runs of 129 tasks with Gemma 4 E4B and E2B (one of them an unchanged re-run as a noise control), plus the Kaggle runner, configurations, traces, statistical tests and the [paper](experiments/swegemma/paper/writeup.md).
+
+## Repository layout
+
+```text
+tokenprof/
+├── src/tokenprof/
+│   ├── proxy.py            logging proxy (tokenprof proxy)
+│   ├── analyze.py          waste detectors for proxy traces (tokenprof analyze)
+│   ├── report.py           HTML report
+│   ├── swe.py              ATIF trajectory profiler for SWE agents (tokenprof swe)
+│   ├── trace.py, pricing.py, cli.py
+├── tests/                  unit tests (pytest)
+├── scripts/                demo agent with planted waste, end-to-end proxy check
+├── experiments/
+│   ├── agents/             pilot: LangGraph, OpenAI Agents SDK and smolagents through the proxy
+│   └── swegemma/           Gemma 4 Developer Agent study: paper, runs, configs, scripts
+│       └── paper/writeup.md    the paper
+└── docs/
+    ├── test-log.md         every test and experiment run, with date, setup and numbers
+    └── results/            raw traces and HTML reports of the proxy experiments
+```
 
 ## Roadmap
 
