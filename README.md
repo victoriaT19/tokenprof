@@ -41,6 +41,20 @@ Each chat completion (streaming or not) becomes one line in `traces.jsonl`: requ
 
 Prices change often, so none are built in. `--pricing` takes a JSON file with USD per million tokens; see [`pricing.example.json`](pricing.example.json).
 
+## Profiling SWE agents: `tokenprof swe`
+
+Coding-agent harnesses often save one trajectory per task instead of raw API calls. `tokenprof swe` reads ATIF trajectories, such as those written by `swegemma`, the harness of the Gemma 4 Developer Agent competition, and reports three things:
+
+- **Prompt anatomy per call.** Each prompt is split into system prompt, task prompt sections, tool schemas, agent history, each tool's outputs and compacted history. The split is scaled to the token counts the server reported. The tool-schema overhead, which the trace never shows, is fitted from the data.
+- **Twelve detectors.** They cover blind truncated reads, repeated reads, failed tool calls, long turns, repetition loops that hit the output cap, context overflows, nudges, calls after `submit_patch`, unverified or missing submissions, and harness errors.
+- **Comparison tables** across runs, including the resolution rate with and without each flag.
+
+```bash
+tokenprof swe experiments/swegemma/results/base_e4b experiments/swegemma/results/guided_e4b --label base --label guided --md table.md
+```
+
+The full study (seven runs of 129 tasks with Gemma 4 E4B and E2B, plus the Kaggle runner, configurations, traces and statistical tests) is in [`experiments/swegemma`](experiments/swegemma).
+
 ## Roadmap
 
 - [x] Logging proxy with streaming support
@@ -50,6 +64,7 @@ Prices change often, so none are built in. `--pricing` takes a JSON file with US
 - [x] Pilot experiment on open-source agent frameworks (tokens before/after, task accuracy)
 - [ ] Detector for large static prompts (found in the pilot: smolagents' default system prompt)
 - [x] Opt-in proxy mode that restores Gemini `thought_signature`s dropped by `langchain-openai` (LangGraph added to the pilot)
+- [x] `tokenprof swe`: profile ATIF trajectories of SWE agents (Gemma 4 Developer Agent study)
 - [ ] PyPI release
 
 ## Results

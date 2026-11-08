@@ -47,10 +47,20 @@ def main(argv: list[str] | None = None) -> None:
         help="smallest tool output (in tokens) checked for being unused",
     )
 
+    swe = commands.add_parser("swe", help="profile SWE-agent trajectories (ATIF traces, e.g. swegemma)")
+    swe.add_argument("results", nargs="+", help="results directories, each with traces/trace_<id>.json")
+    swe.add_argument("--label", action="append", help="name of each results directory in the table")
+    swe.add_argument("--json", help="write the full summary (list, one per directory) to this file")
+    swe.add_argument("--md", help="write the comparison table as Markdown to this file")
+    swe.add_argument("--thinking-threshold", type=int, default=2000,
+                     help="completion tokens above which one call counts as a thinking burst")
+
     args = parser.parse_args(argv)
 
     if args.command == "analyze":
         _analyze(args)
+    elif args.command == "swe":
+        _swe(args)
     elif args.command == "proxy":
         import uvicorn
 
@@ -80,3 +90,23 @@ def _analyze(args: argparse.Namespace) -> None:
 
 if __name__ == "__main__":
     main()
+
+
+def _swe(args: argparse.Namespace) -> None:
+    import json
+
+    from .swe import load_results_dir, max_output_from_submission, render_markdown, summarize
+
+    labels = args.label or []
+    summaries = []
+    for i, results in enumerate(args.results):
+        label = labels[i] if i < len(labels) else Path(results).resolve().parent.name
+        summaries.append(summarize(load_results_dir(results), label=label,
+                                   thinking_threshold=args.thinking_threshold,
+                                   max_output_tokens=max_output_from_submission(results)))
+    table = render_markdown(summaries)
+    print(table)
+    if args.md:
+        Path(args.md).write_text(table, encoding="utf-8")
+    if args.json:
+        Path(args.json).write_text(json.dumps(summaries, indent=2, ensure_ascii=False), encoding="utf-8")

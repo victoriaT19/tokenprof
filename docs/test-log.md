@@ -224,3 +224,88 @@ Na primeira tentativa, o Ollama tentou usar a GPU integrada Intel pelo backend V
 - Os mesmos do piloto (tarefas simples, API sintética, um modelo, latência não comparável no nível gratuito).
 - O LangGraph rodou num lote separado, depois dos outros dois, no mesmo dia e com o mesmo modelo.
 - Na rodada do LangGraph, o proxy alterava as requisições (recolocando as assinaturas). Isso não muda os tokens de forma relevante, porque a assinatura tem cerca de 100 caracteres por chamada, mas fica registrado.
+---
+
+## 2026-11-07: perfil de agentes SWE (traces ATIF do swegemma)
+
+Novo módulo `tokenprof.swe` e comando `tokenprof swe`, que leem os traces da competição Gemma 4 Developer Agent (formato ATIF v1.7).
+
+### Testes automatizados
+
+`pytest`: **27 de 27 passaram** (6 novos em `tests/test_swe.py`). Os novos cobrem:
+
+- divisão do prompt da task nas seções do harness (problema, orçamento, regras, instruções, árvore do repositório);
+- carregamento do trace: só as chamadas do agente principal entram na anatomia, e os tokens de sub-agentes são contados à parte;
+- detectores: leitura sem intervalo que veio truncada, releitura sem edição no meio (uma edição que falhou não conta), turno de raciocínio longo, erro de ferramenta, chamadas depois do `submit_patch`, patch enviado sem rodar nada depois da última edição;
+- o ajuste por mínimos quadrados recupera o custo fixo (500 tokens) e os caracteres por token (3,2) de dados sintéticos, e a anatomia de cada chamada soma exatamente os tokens informados;
+- o comando `tokenprof swe` de ponta a ponta, lendo a resolução de `run_results.jsonl`.
+
+### Rodada de teste no Kaggle (smoke)
+
+**Ambiente:** notebook privado no Kaggle, 4× NVIDIA L4, imagem fixada do notebook oficial (Python 3.12), harness `swegemma` 0.2.11, vLLM 0.19.1.
+**Configuração:** `sample_submission` oficial trocada para `gemma-4-e4b-it-qat-w4a16-ct`, 4 tasks (`tasks[::32]`), 2 em paralelo, até 40 chamadas de ferramenta e 15 min por task.
+
+| | Valor |
+|---|---|
+| Tasks resolvidas | 1/4 (`fastapi_14463`) |
+| Duração da rodada | 636 s (cerca de 8 min só para subir o vLLM; cada task levou de 42 a 102 s) |
+| Chamadas ao modelo (mediana por task) | 8 |
+| Pico de contexto (mediana) | 12.482 tokens |
+| Tokens de prompt / de saída | 316.820 / 15.528 |
+| Custo fixo ajustado (schemas de ferramentas + template) | 829 tokens, 3,2 caracteres por token |
+
+**O que apareceu:**
+
+- As 4 tasks leram arquivo longo sem intervalo de linhas e receberam só o começo (o `read_file` corta em 150 linhas).
+- 5 das 8 chamadas de `edit_file` falharam com "old_string not found".
+- 2 das 4 tasks enviaram o patch sem rodar nada depois da última edição.
+- Todas as 4 tasks fizeram uma chamada a mais depois do `submit_patch`, com o contexto inteiro (de 9 mil a 15 mil tokens cada).
+- Nenhuma task chegou a ativar a compactação de contexto (limite de 14.336 tokens).
+
+Com 4 tasks os números servem só para validar o pipeline; as rodadas completas (129 tasks) vêm a seguir.
+
+---
+
+## 2026-11-07 a 08: experimento completo no Kaggle (129 tasks por rodada)
+
+**Ambiente:** notebooks privados no Kaggle, 4× NVIDIA L4, imagem do notebook oficial (Python 3.12), `swegemma` 0.2.11, vLLM 0.19.1, 6 tasks em paralelo. Orçamento por task: 100 chamadas de ferramenta, 30 min, 300 s por comando. Todas as 129 tasks públicas em cada rodada.
+**Dados brutos:** `experiments/swegemma/results/<rodada>/` (resultado por task, traces ATIF e logs). Tabelas geradas por `tokenprof swe`, `compare.py` e `behaviour.py` na mesma pasta.
+
+**Configurações:** `base` (sample_submission oficial), `window` (`max_output_tokens` 6144 e `thinking_budget` 2048), `guided` (prompt oficial + 6 regras), `full` (as duas coisas).
+
+### Resolução
+
+| | base | window | guided | full |
+|---|---|---|---|---|
+| E4B | 10/129 | 12/129 (McNemar p=0,73) | 12/129 (p=0,73) | 10/129 (p=1,00) |
+| E2B | 6/129 | 9/129 (p=0,25) | não rodada | 7/129 (p=1,00) |
+
+Nenhuma diferença de resolução é estatisticamente significativa. As quatro rodadas do E4B juntas resolveram 21 tasks diferentes, contra 10 a 12 por rodada.
+
+### Comportamento (E4B; teste exato de Fisher contra a base)
+
+| | base | window | guided | full |
+|---|---|---|---|---|
+| `read_file` com intervalo de linhas | 47% | 46% | 63% (p<0,001) | 59% (p<0,001) |
+| Tasks com leitura truncada às cegas | 83% | 89% | 54% (p<0,001) | 65% (p=0,002) |
+| Tasks com releitura | 26% | 31% | 7% (p<0,001) | 17% |
+| Tasks com estouro de contexto | 7% | 0% (p=0,003) | 5% | 1% (p=0,019) |
+| Tasks sem patch enviado | 9% | 0% (p<0,001) | 5% | 1% (p=0,003) |
+| Sucesso do `edit_file` | 62% | 58% | 61% | 53% (p=0,015) |
+
+No E2B, `window` e `full` zeraram os estouros de contexto (29% → 0%).
+
+### O que foi verificado à parte
+
+- A implementação do teste de Fisher bate com os valores conhecidos do scipy (0,4857 para [[3,1],[1,3]] e 1,08e-05 para [[10,0],[0,10]]).
+- Classificação das 109 edições que falharam na base do E4B: 39% misturaram linhas vistas com linhas nunca vistas, 19% tinham mais de um lugar possível, 13% tinham todas as linhas vistas mas fora de ordem ou com linhas puladas, 13% não tinham nenhuma linha vista.
+- Edições de 1 linha acertam 72% das vezes e de 16+ linhas 47%: encurtar o `old_string` ajuda pouco.
+
+### Testes automatizados
+
+`pytest`: **31 de 31 passaram**. Novos desde a última entrada: detector de chamada que bateu no teto de saída (com rótulo de loop de repetição), leitura do teto a partir da config da submissão, estouro de contexto, erros do harness, nudges, resultado de sub-agente atribuído à chamada certa, compactação na anatomia, e os casos "sem submit" e "submit sem edição".
+
+### Limites
+
+- Só as 129 tasks públicas, e cada configuração rodou uma vez (há uma repetição da base do E4B em andamento para medir o ruído).
+- As regras do `guided` foram escritas depois de ver o perfil da base, nas mesmas tasks.

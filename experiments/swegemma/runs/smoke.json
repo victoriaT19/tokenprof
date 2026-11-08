@@ -1,0 +1,9 @@
+{
+  "name": "smoke",
+  "model": "gemma-4-e4b-it-qat-w4a16-ct",
+  "stride": 32,
+  "limit": 4,
+  "concurrency": 2,
+  "dump_sources": true,
+  "budget": {"timeout_seconds": 120, "max_time_minutes": 15, "max_tool_calls": 40, "max_turns": 100}
+}

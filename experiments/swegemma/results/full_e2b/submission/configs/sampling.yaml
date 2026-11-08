@@ -1,0 +1,8 @@
+temperature: 0.2
+top_p: 0.95
+# vLLM reserves max_output_tokens out of the 32,768-token window, so 16,384 left
+# prompts only 16,384 tokens before every call failed. 6,144 leaves ~26.6k for the prompt.
+max_output_tokens: 6144
+thinking_config:
+  thinking_budget: 2048
+  include_thoughts: true

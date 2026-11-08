@@ -1,0 +1,19 @@
+{
+  "run": {
+    "name": "base_e2b",
+    "model": "gemma-4-e2b-it-qat-w4a16-ct",
+    "stride": 1,
+    "concurrency": 6,
+    "budget": {
+      "timeout_seconds": 300,
+      "max_time_minutes": 30,
+      "max_tool_calls": 100,
+      "max_turns": 500
+    }
+  },
+  "model": "gemma-4-e2b-it-qat-w4a16-ct",
+  "tasks": 129,
+  "resolved": 6,
+  "resolution_rate": 0.046511627906976744,
+  "wall_seconds": 4243.791338920593
+}
