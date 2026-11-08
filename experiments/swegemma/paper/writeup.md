@@ -11,22 +11,23 @@ On all 129 public tasks, the official sample configuration resolves 10 tasks wit
 - about 40% of all prompt tokens are a fixed prefix resent on every call;
 - 83% of E4B runs read a long file blindly and got only its first 150 lines;
 - `edit_file` fails 38% (E4B) to 70% (E2B) of the time;
+- two of the three code-graph tools were almost never called;
 - the sample's `max_output_tokens: 16384` reserves half the 32k window, which killed 29% of E2B runs with a context error.
 
-Three profiler-guided interventions (prompt rules, a context-budget fix, and both) each changed the behaviour they targeted (Fisher's exact test, p < 0.01): blind reads fell from 83% to 54% of runs, and E2B context overflows from 29% to 0%. However, no resolution difference reached significance (E4B: 10, 12, 12 and 10 tasks; McNemar p ≥ 0.73). An unchanged re-run of the baseline solved 9 tasks and showed no significant behaviour change, and five E4B runs together solved 21 different tasks. Run-to-run noise in agentic evaluation is known; our point is practical. When a fixed GPU quota rules out many repeated runs, behaviour metrics from the same traces can be tested even where resolution cannot.
+Three profiler-guided interventions (prompt rules, a context-budget fix, and both) each changed the behaviour they targeted (Fisher's exact test, p < 0.01): blind reads fell from 83% to 54% of runs, and E2B context overflows from 29% to 0%. However, no resolution difference reached significance (E4B: 10, 12, 12 and 10 tasks; McNemar p ≥ 0.73). An unchanged re-run of the baseline solved 9 tasks and showed no significant behaviour change. Run-to-run noise in agentic evaluation is known; our point is practical. When a fixed GPU quota rules out many repeated runs, behaviour metrics from the same traces can be tested even where resolution cannot.
 
 ## 1. Introduction
 
-The Gemma 4 Developer Agent competition asks for an agent that fixes real issues in Python repositories offline. It runs on 4× L4 GPUs, with a single Gemma 4 model and a declarative ADK configuration, and it is scored by the share of tasks whose hidden tests pass. That single number does not say *why* an agent fails. With resolution rates under 10% on about a hundred tasks, it is also too noisy to say whether a change helped. On SWE-bench Verified, single-run pass@1 shifts by 2–6 points between identical runs (Bjarnason et al., 2026). The standard remedies are more runs and paired tests (Miller, 2024), and more runs are exactly what a weekly GPU quota does not allow.
+The Gemma 4 Developer Agent competition asks for an offline agent that fixes real issues in Python repositories, using one Gemma 4 model and a declarative ADK configuration on 4× L4 GPUs, scored by the share of tasks whose hidden tests pass. That single number does not say *why* an agent fails. With resolution rates under 10% on about a hundred tasks, it is also too noisy to say whether a change helped. On SWE-bench Verified, single-run pass@1 shifts by 2–6 points between identical runs (Bjarnason et al., 2026). The standard remedies are more runs and paired tests (Miller, 2024), and more runs are exactly what a weekly GPU quota does not allow.
 
-For a 2–4B model in a 32k window, waste is a capability problem, not just a cost problem. Every token of boilerplate displaces code the model needs, and every malformed tool call burns a turn. We argue that improving such agents should start where performance engineering starts: with a profiler. Prior token analyses of coding agents measure the *cost* of frontier models (Bai et al., 2026), and failure taxonomies are built by hand (Liu et al., 2025). We instead rebuild every prompt of a small model from its trace, including the parts the trace omits, and detect failures automatically on every run.
+For a 2–4B model in a 32k window, waste is a capability problem: boilerplate displaces code the model needs, and every malformed tool call burns a turn. We argue that improving such agents should start where performance engineering starts: with a profiler. Prior token analyses of coding agents measure the *cost* of frontier models (Bai et al., 2026), and failure taxonomies are built by hand (Liu et al., 2025). We instead rebuild every prompt of a small model from its trace, including the parts the trace omits, and detect failures automatically on every run.
 
 Contributions:
 
 1. **A resource.** `tokenprof swe` reports a per-call prompt anatomy calibrated against reported token counts, twelve detectors, and side-by-side run comparisons. Companion scripts run any configuration on Kaggle's 4× L4 machines and test resolution (exact McNemar) and behaviour (Fisher's exact).
 2. **A profile** of Gemma 4 E4B and E2B on all 129 public tasks.
 3. **An ablation** of profiler-guided interventions, with an unchanged re-run of the baseline as a noise control: eight full runs, 1,032 task attempts, all traces released.
-4. **Findings for harness designers**: half-window output reservation, untraced compaction, a forced post-submit call, and a large static task prompt.
+4. **Findings for harness designers** on output reservation, compaction, the post-submit call and graph-tool use.
 
 ## 2. Setup
 
@@ -44,9 +45,9 @@ Contributions:
 
 **Prompt anatomy.** The prompt of call *i* is rebuilt as the system prompt, the task prompt split into its harness sections (problem, budget, rules, instructions, code-intelligence tools, workspace tree), a fixed tool-schema overhead, everything the agent emitted before *i*, and every earlier tool output, grouped by tool. Parts are sized in characters and scaled to sum exactly to the reported `prompt_tokens`, so totals are exact and only the split is estimated. A delegated agent's report is attributed to the AgentTool call that started it, and its own calls are counted separately.
 
-**Fitting what the trace does not show.** Tool schemas never appear in the trace. The first call of every task contains only fixed parts, and only the task prompt's length varies across tasks. So a least-squares fit of first-call tokens against characters gives the overhead as the intercept (1,011 tokens) and the tokenizer's ratio as the slope (3.3 characters per token).
+**Fitting what the trace does not show.** Tool schemas never appear in the trace. Every task's first call holds only fixed parts, and only the task prompt's length varies, so a least-squares fit of first-call tokens against characters gives the overhead as the intercept (1,011 tokens) and the tokenizer's ratio as the slope (3.3 characters per token).
 
-**Compaction.** ADK compacts history past a token threshold, but on our runs this left no event in the trace, and the summarization calls were not recorded either. tokenprof infers compaction from a prompt-size drop of more than 5%, then re-bases the anatomy on a "compacted history" part.
+**Compaction.** ADK compacts history past a token threshold without leaving a trace event or recording its summarization calls. tokenprof infers it from a prompt-size drop above 5% and re-bases the anatomy on a "compacted history" part.
 
 **Detectors.**
 
@@ -56,7 +57,7 @@ Contributions:
 | `repeated_read` | same file and range read again with no successful edit in between |
 | `tool_error` | a non-shell tool returned an error (e.g. `old_string not found`) |
 | `thinking_burst` | one call generated more than 2,000 tokens |
-| `output_cap_hit` | one call reached `max_output_tokens` (read from the submission); labelled a repetition loop if its text compresses below 15% |
+| `output_cap_hit` | a call hit `max_output_tokens`; a repetition loop if its text compresses below 15% |
 | `context_overflow` | the harness reported a context-window error |
 | `continuation_nudge` | the harness had to prompt the agent to continue |
 | `post_submit_calls` | LLM calls after `submit_patch` |
@@ -106,11 +107,13 @@ We classified the 109 failed E4B edits by comparing `old_string` with everything
 
 Shorter `old_string`s help less than expected (one line: 72% success; 2–6 lines: 69%; 16+: 47%). Runs with a failed tool call resolved 0% of the time, against 11.2% without one.
 
-**Finding 3: half the window reserved for output.** vLLM rejects requests where the prompt plus `max_output_tokens` exceeds `max_model_len`. With the sample's 16,384, any prompt over 16,384 tokens fails. ADK's compaction threshold (14,336) sits below that line, but compaction runs at intervals, so one large tool output can jump past it. In 37 E2B runs and 9 E4B runs the next call was rejected and the task ended unresolved.
+**Finding 3: half the window reserved for output.** vLLM rejects a request when prompt plus `max_output_tokens` exceeds `max_model_len`, so with the sample's 16,384 any prompt over 16,384 tokens fails. Compaction (threshold 14,336) runs only at intervals, so one large tool output can jump past that line. In 37 E2B runs and 9 E4B runs the next call was rejected and the task ended unresolved.
 
 The reservation buys little. Only 10 of 1,673 E4B calls generated more than 4,096 tokens. The calls that reached 16,384 were failures: 14 E2B calls, most of whose text compresses to 2–8% of its size, meaning the model repeated itself until the cap.
 
 **Finding 4: a forced post-submit call.** The session ends only after the turn that called `submit_patch`, and ADK first returns the tool result to the model, so nearly every run makes one more full-context call: 8.4% of all E4B tokens.
+
+**Finding 5: the graph tools are barely used.** Of the three code-graph tools, only `search_similar_code` sees real use: 105 E4B calls across 55 runs, costing 4.5% of all prompt tokens (9.1% for E2B). `get_code_neighbors` and `get_code_subgraph` were called 7 and 2 times by the E4B root agent, and 16 and 5 times by the sub-agent. Offline, the search expects symbol names and falls back to word overlap for phrases, yet 19% of E4B queries and 34% of E2B queries were phrases such as "File Form parameter validation". The grep-first rules halved graph use (63 → 30 runs) without lowering resolution: small models need symbol-first prompting or training to benefit from the graph.
 
 ## 5. Profiler-guided interventions
 
@@ -119,8 +122,6 @@ Each intervention targets detector findings:
 - **guided** adds six rules to the sample prompt: locate code with `grep -n` and read a line range; don't re-read; copy a short, exact `old_string` from the latest read; keep turns short; run a targeted test before submitting; finish with one sentence.
 - **window** sets `max_output_tokens: 6144` and `thinking_budget: 2048`, which leaves about 26.6k tokens for the prompt.
 - **full** applies both.
-
-All runs use the same 129 tasks and budgets.
 
 **Table 3.** Resolution. McNemar p-values compare each run with its baseline, task by task.
 
@@ -144,12 +145,12 @@ All runs use the same 129 tasks and budgets.
 
 For E2B, both window and full removed every context overflow (29% → 0%\*\*) and cut runs with no submission from 30% to 9%\*\* and 2%\*\*. full also raised ranged reads from 9% to 40%\*\* and the share of runs that executed code from 53% to 74%\*\*.
 
-**Noise control.** We re-ran the E4B baseline unchanged. It resolved 9 tasks against 10: 8 in common, 2 only in the first run and 1 only in the re-run (McNemar p = 1.00). No behaviour metric in Table 4 differed significantly between the two (all p ≥ 0.08; e.g. blind truncated reads 83% vs 86%, edit success 62% vs 63%), so the shifts in Table 4 are not what re-running alone produces. The control also exposes noisy metrics: context overflows went from 9 to 16 runs, which makes window's drop to 0 more telling. Across all five E4B runs, 21 different tasks were solved at least once, against 9 to 12 per run.
+**Noise control.** We re-ran the E4B baseline unchanged. It resolved 9 tasks against 10 (8 shared; McNemar p = 1.00). No behaviour metric in Table 4 differed significantly between the two (all p ≥ 0.08; e.g. blind truncated reads 83% vs 86%, edit success 62% vs 63%), so the shifts in Table 4 are not what re-running alone produces. The control also exposes noisy metrics: context overflows went from 9 to 16 runs, which makes window's drop to 0 more telling. Across all five E4B runs, 21 different tasks were solved at least once, against 9 to 12 per run.
 
 **Reading the results.**
 
 - *The interventions did what they were designed to do*: navigation rules changed navigation; the budget fix removed overflows and missing submissions.
-- *None moved the bottleneck.* Edit fidelity never improved, and full made it worse. The model can locate code and manage its context, but cannot reliably reproduce the text it wants to replace.
+- *None moved the bottleneck.* Edit fidelity never improved, and full made it worse. The model can locate code but cannot reliably reproduce the text it wants to replace.
 - *Resolution cannot see these effects*; behaviour metrics over hundreds of tool calls can.
 
 ## 6. Discussion
@@ -171,13 +172,12 @@ For E2B, both window and full removed every context overflow (29% → 0%\*\*) an
 - The anatomy split is apportioned by characters: exact in total, estimated per part.
 - Compaction is inferred from prompt drops, and its summarization calls are invisible.
 - The guided rules were written after seeing the baseline profile, so behaviour gains on the same tasks may overstate gains on new ones.
-- We did not run guided on E2B for lack of GPU quota.
 
 ## 8. Related work
 
-**Benchmarks and interfaces.** SWE-bench (Jimenez et al., 2024) defined issue resolution verified by tests; the competition harness follows its protocol. SWE-agent (Yang et al., 2024) showed that the agent–computer interface changes resolution rates. Our read and edit findings are that phenomenon, measured automatically for small models.
+**Benchmarks and interfaces.** SWE-bench (Jimenez et al., 2024) defined test-verified issue resolution. SWE-agent (Yang et al., 2024) showed that the agent–computer interface changes resolution rates. Our read and edit findings are that phenomenon, measured automatically for small models.
 
-**Evaluation noise.** Bjarnason et al. (2026) ran about 60,000 SWE-bench Verified trajectories and found that improvements of 2–3 points can be noise. Miller (2024) recommends paired, question-level tests. We confirm the effect with a controlled re-run and propose a complement for compute-limited settings: test the behaviour a change targets.
+**Evaluation noise.** Bjarnason et al. (2026) ran about 60,000 SWE-bench Verified trajectories and found that improvements of 2–3 points can be noise. Miller (2024) recommends paired, question-level tests. We confirm it with a controlled re-run and add a complement for compute-limited settings: testing the targeted behaviour.
 
 **Trajectories and tokens.** Liu et al. (2025) built a manual taxonomy of 150 failed issues across localization, repair and validation. Bai et al. (2026) analyzed token consumption of eight frontier models on SWE-bench Verified, finding that input tokens dominate cost and that repeated file views mark expensive runs. tokenprof works per call from the trajectory alone, recovers what the trace omits (tool schemas, compaction), and targets small models, for which the 32k window, not price, is the binding constraint.
 
@@ -185,14 +185,7 @@ For E2B, both window and full removed every context overflow (29% → 0%\*\*) an
 
 ## 9. Reproducibility
 
-The profiler, Kaggle runner, configurations, comparison scripts and all eight runs' traces are at <https://github.com/victoriaT19/tokenprof> (study in `experiments/swegemma`). Profiling and comparing runs:
-
-```bash
-pip install -e .
-tokenprof swe experiments/swegemma/results/base_e4b experiments/swegemma/results/full_e4b --label base --label full --md table.md
-python experiments/swegemma/behaviour.py base_e4b guided_e4b
-python experiments/swegemma/compare.py base_e4b guided_e4b
-```
+The profiler, Kaggle runner, configurations, comparison scripts and all eight runs' traces are at <https://github.com/victoriaT19/tokenprof> (study in `experiments/swegemma`). The study's README lists the commands that rebuild every table from the released traces, without a GPU.
 
 ## References
 
