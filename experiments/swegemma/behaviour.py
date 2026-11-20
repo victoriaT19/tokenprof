@@ -32,10 +32,21 @@ def fisher(a: int, n1: int, b: int, n2: int) -> float:
     return min(1.0, sum(p for x in range(lo, hi + 1) if (p := prob(x)) <= observed * (1 + 1e-9)))
 
 
+def is_skill_edit(t) -> bool:
+    return t.name == "run_skill_script" and "replace_lines" in str(t.args.get("file_path"))
+
+
+def edit_ok(t) -> bool:
+    if is_skill_edit(t):
+        return "OK: replaced" in str(t.output)
+    return t.status == "ok"
+
+
 def metrics(name: str) -> dict[str, tuple[int, int]]:
     runs = load_results_dir(HERE / "results" / name)
     seq = [t for r in runs for _, t in r.tool_sequence()]
-    edits = [t for t in seq if t.name == "edit_file"]
+    # An edit is an edit_file call or a replace_lines run of the line-edit skill.
+    edits = [t for t in seq if t.name == "edit_file" or is_skill_edit(t)]
     reads = [t for t in seq if t.name == "read_file"]
     flags = {r.instance_id: {f.kind for f in detect(r)} for r in runs}
 
@@ -43,7 +54,7 @@ def metrics(name: str) -> dict[str, tuple[int, int]]:
         return sum(1 for r in runs if kind in flags[r.instance_id]), len(runs)
 
     return {
-        "edit_file succeeded (calls)": (sum(1 for t in edits if t.status == "ok"), len(edits)),
+        "edit_file succeeded (calls)": (sum(1 for t in edits if edit_ok(t)), len(edits)),
         "read_file with a line range (calls)": (
             sum(1 for t in reads if t.args.get("start_line") or t.args.get("end_line")), len(reads)),
         "runs with an unscoped truncated read": runs_with("unscoped_truncated_read"),

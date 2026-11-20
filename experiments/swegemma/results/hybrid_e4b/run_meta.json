@@ -1,0 +1,20 @@
+{
+  "run": {
+    "name": "hybrid_e4b",
+    "model": "gemma-4-e4b-it-qat-w4a16-ct",
+    "stride": 1,
+    "submission_dir": "../submissions/hybrid_e4b",
+    "concurrency": 6,
+    "budget": {
+      "timeout_seconds": 240,
+      "max_time_minutes": 15,
+      "max_tool_calls": 40,
+      "max_turns": 80
+    }
+  },
+  "model": "gemma-4-e4b-it-qat-w4a16-ct",
+  "tasks": 129,
+  "resolved": 11,
+  "resolution_rate": 0.08527131782945736,
+  "wall_seconds": 3541.9263932704926
+}

@@ -1,0 +1,8 @@
+temperature: 0.2
+top_p: 0.95
+# vLLM rejects any request where prompt + max_output_tokens exceeds 32,768 tokens,
+# so 16,384 left only half the window for the prompt.
+max_output_tokens: 8192
+thinking_config:
+  thinking_budget: 4096
+  include_thoughts: true

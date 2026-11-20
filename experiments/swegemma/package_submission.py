@@ -24,13 +24,13 @@ ALLOWED_MODELS = {
 ALLOWED_EXT = {".yaml", ".yml", ".md", ".txt", ".py", ".json", ".safetensors"}
 MAX_BYTES = 3 * 1024**3
 EVAL_CONFIG = """\
-# Per-task budget used in Stage 1 inference. Our profiled runs needed a median of
-# 10 tool calls and under 3 minutes per task, far below these limits.
+# Per-task budget used in Stage 1 inference. The scorer runs the hidden tasks one
+# after another within 12 hours in total, so the time cap must fit that limit.
 evaluation:
-  timeout_seconds: 300
-  max_tool_calls: 100
-  max_time_minutes: 20
-  max_turns: 500
+  timeout_seconds: {timeout}
+  max_tool_calls: {calls}
+  max_time_minutes: {minutes}
+  max_turns: {turns}
 """
 
 
@@ -39,6 +39,10 @@ def main() -> None:
     parser.add_argument("config")
     parser.add_argument("--model", required=True, choices=sorted(ALLOWED_MODELS))
     parser.add_argument("--out", required=True)
+    parser.add_argument("--calls", type=int, default=100, help="max tool calls per task")
+    parser.add_argument("--minutes", type=int, default=20, help="max wall-clock minutes per task")
+    parser.add_argument("--timeout", type=int, default=300, help="seconds per command")
+    parser.add_argument("--turns", type=int, default=500, help="max LLM turns per task")
     args = parser.parse_args()
 
     root = Path(args.config)
@@ -60,7 +64,9 @@ def main() -> None:
             data = text.encode("utf-8")
         files[path.relative_to(root).as_posix()] = data
         total += len(data)
-    files["eval_config.yaml"] = EVAL_CONFIG.encode("utf-8")
+    files["eval_config.yaml"] = EVAL_CONFIG.format(
+        timeout=args.timeout, calls=args.calls, minutes=args.minutes, turns=args.turns
+    ).encode("utf-8")
     assert total < MAX_BYTES, "submission over 3 GiB"
     models = {m for name, d in files.items() if name.endswith((".yaml", ".yml"))
               for m in re.findall(r"^\s*model:\s*(\S+)", d.decode("utf-8"), re.M)}
